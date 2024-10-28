@@ -29,12 +29,11 @@ class GoGame:
     def onclick(self, event):
         x = round(event.x / self.cell_size)
         y = round(event.y / self.cell_size)
-        print(f'x = {x}, y = {event.x}')
+        print(f'x = {x}, y = {y}')  # 記得改成正確的 x 和 y 值
         if self.can_move(y, x):
-            self.place_stone(y, x)
-            self.draw_stone(y, x)
-            self.check(y, x)
-            self.switch_player()
+            self.place_stone(y, x)  # 落子
+            self.draw_stone(y, x)   # 畫棋子
+            self.switch_player()    # 切換玩家
 
     def can_move(self, y, x):
         if x < 0 or x >= self.board_size or y < 0 or y >= self.board_size:
@@ -54,17 +53,18 @@ class GoGame:
         x2 = x * self.cell_size + self.cell_size // 4
         y1 = y * self.cell_size - self.cell_size // 4
         y2 = y * self.cell_size + self.cell_size // 4
-        if self.current_play == 'A':
+        if self.current_play == 'A':  # 黑棋
             self.canvas.create_oval(x1, y1, x2, y2, fill='black')
-        else:
+        else:  # 白棋
             self.canvas.create_oval(x1, y1, x2, y2, fill='white')
 
-    def check(self, y, x):
+
+    # def check(self, y, x):
         
     def switch_player(self):
-        if self.current_play == 'A':
+        if self.current_play == 'A':  # 如果當前玩家是A，則切換為B
             self.current_play = 'B'
-        else:
+        else:  # 否則切換為A
             self.current_play = 'A'
     def start(self):
         self.window.mainloop()
