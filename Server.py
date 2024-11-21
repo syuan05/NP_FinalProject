@@ -35,10 +35,11 @@ def game_start(client, add):
                         BCount += 1
                         ans_used[j] = True
                         break
-        client.sendall(f"your guess: {guess} \nA:{ACount} B:{BCount}".encode('utf-8'))
         if ACount == 4:
             client.sendall("You guess the correct number!".encode('utf-8'))
             break
+        else:
+            client.sendall(f"your guess: {guess} \nA:{ACount} B:{BCount}".encode('utf-8'))
     client.close()
 
 def main():
