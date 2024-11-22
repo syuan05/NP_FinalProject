@@ -5,7 +5,22 @@ import threading
 serverIP = '127.0.0.1'
 PORT = 54321
 ans = [random.randrange(10) for _ in range(4)]
-def game_start(client, add):
+
+clients = []
+clients_lock = threading.Lock()
+
+def broadcast(message, sender_client=None):
+    with clients_lock:
+        for client in clients:
+            if clients != sender_client:
+                try:
+                    client.sendall(message).encode('utf-8')
+                except:
+                    clients.remove(client)
+                
+def game_start(client, addr):
+    with clients_lock:
+        clients.append(client)
     while True:
         receive = client.recv(1024)
         num = int(receive)
@@ -36,9 +51,13 @@ def game_start(client, add):
                         ans_used[j] = True
                         break
         if ACount == 4:
-            client.sendall("You guess the correct number!".encode('utf-8'))
+            msg = f"{addr} guess the correct number!\nAns: {ans}"
+            broadcast(msg, client)
+            client.sendall(f"You guess the correct number!".encode('utf-8'))
             break
         else:
+            msg = f"{addr} guess: {guess} \nA:{ACount} B:{BCount}"
+            broadcast(msg, client)
             client.sendall(f"your guess: {guess} \nA:{ACount} B:{BCount}".encode('utf-8'))
     client.close()
 
