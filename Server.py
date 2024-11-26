@@ -1,6 +1,8 @@
 import random
 import socket
 import threading
+import tkinter as tk
+from tkinter import scrolledtext, messagebox
 
 serverIP = '127.0.0.1'
 PORT = 54321

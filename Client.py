@@ -1,33 +1,123 @@
 import socket
 import threading
+import tkinter as tk
+from tkinter import ttk, messagebox
 
-serverIP = '127.0.0.1'
-PORT = 54321
 
-def receive_message(cSocket):
-    while True:
+class GuessNumberClient:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("1A2B")
+        self.root.geometry("600x600")
+        
+        self.server_ip = '127.0.0.1'
+        self.port = 54321
+        self.create_ui()
+        self.connect_server()
+
+    def create_ui(self):
+        self.main_frame = tk.Frame(self.root)
+        self.main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        
+        self.left_frame = tk.Frame(self.main_frame, width=300, relief=tk.SUNKEN, borderwidth=1)
+        self.left_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 5))
+        self.left_frame.pack_propagate(False)
+
+        # View history
+        self.show_history = ttk.Treeview(self.left_frame, columns=('Guess', 'Result'), show='headings')
+        self.show_history.heading('Guess', text='Guess')
+        self.show_history.heading('Result', text='Result')
+        self.show_history.column('Guess', width=100, anchor='center')
+        self.show_history.column('Result', width=100, anchor='center')
+        self.show_history.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+
+        self.history_scrollbar = ttk.Scrollbar(self.left_frame, orient=tk.VERTICAL, command=self.show_history.yview)
+        self.show_history.configure(yscrollcommand=self.history_scrollbar.set)
+        self.history_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        self.right_frame = tk.Frame(self.main_frame, width=300)
+        self.right_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=(5,0))
+        self.right_frame.pack_propagate(False)
+
+        self.title_label = tk.Label(self.main_frame, text="1A2B", font=('Arial', 16))
+        self.title_label.pack(padx=10)
+
+        self.input_frame = tk.Frame(self.right_frame)
+        self.input_frame.pack(pady=5)
+
+        self.guess_label = tk.Label(self.input_frame, text="Enter a number")
+        self.guess_label.pack(side=tk.LEFT, padx=5)
+
+        self.guess_input = tk.Entry(self.input_frame, width=10, font=('Arial', 12))
+        self.guess_input.pack(side=tk.LEFT, padx=5)
+        self.guess_input.bind('<Return>', self.send_guess)
+
+        self.send_button = tk.Button(self.input_frame, text='Send', command=self.send_guess)
+        self.send_button.pack(side=tk.LEFT, padx=5)
+
+        self.status_label = tk.Label(self.right_frame, text="", font=('Arial', 10))
+        self.status_label.pack(pady=10)
+        # self.game_log = tk.Text(self.root, wrap=tk.WORD, width=50, height=15)
+        # self.game_log.pack(padx=10, pady=10)
+    
+    def send_guess(self, event=None):
         try:
-            feedback = cSocket.recv(1024).decode('utf-8')
-            print(feedback)
-            if 'correct' in feedback:
+            guess = self.guess_input.get()
+
+            if not guess.isdigit() or len(guess) != 4:
+                messagebox.showwarning("Error input", "Please enter a 4-digit number")
+                return
+            
+            self.client_socket.send(guess.encode('utf-8'))
+            self.guess_input.delete(0, tk.END)      # Clear input
+        except Exception as e:
+            self.status_label.config(text=f"Send error: {e}", fg="red")
+            self.disconnect()
+    
+    def update_history(self, guess, result):
+        self.show_history.insert('', 0, values=(guess, result))
+    def connect_server(self):
+        try:
+            self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.client_socket.connect((self.server_ip, self.port))
+            self.receive_thread = threading.Thread(target=self.receive_message)
+            self.receive_thread.daemon = True
+            self.receive_thread.start()
+        except Exception as e:
+            messagebox.showerror("Connection error", str(e))
+            self.root.quit()
+    def receive_message(self):
+        while True:
+            try:
+                feedback = self.client_socket.recv(1024).decode('utf-8')
+                if "guess" in feedback.lower():
+                    parts = feedback.split('\n')
+                    guess = parts[0]
+                    result = parts[1] if len(parts) > 1 else ""
+                    self.update_history(guess, result)
+                if 'correct' in feedback:
+                    break
+                if "correct number" in feedback.lower():
+                    self.status_label.config(text="You won! Game over.", fg="green")
+                    self.guess_input.config(state=tk.DISABLED)
+                    self.send_button.config(state=tk.DISABLED)
+                    messagebox.showinfo("Congratulations!", "You guessed the correct number!")
+                    break
+                else:
+                    self.status_label.config(text=feedback, fg="black")
+            except Exception as e:
+                self.status_label.config(text=f"Receive error: {e}", fg="red")
                 break
-        except:
-            print("Disconnect")
-            break
+
+    
+    def disconnect(self):
+        if self.client_socket:
+            self.client_socket.close()
+        self.root.quit()
 def main():
-    cSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    print('Connecting to %s port %s' % (serverIP, PORT))
-    cSocket.connect((serverIP, PORT))
-    receive_thread = threading.Thread(target=receive_message, args=(cSocket,), daemon=True)
-    receive_thread.start()
-    while True:
-        guess = int(input("Enter a number(0000-9999): "))
-        cSocket.send(str(guess).encode('utf-8'))
-        feedback = cSocket.recv(1024).decode('utf-8')
-        print(feedback)
-        if 'correct' in feedback:
-            break
-    cSocket.close()
+    root = tk.Tk()
+    client = GuessNumberClient(root)
+    root.mainloop()
 
 if __name__ == '__main__':
     main()
