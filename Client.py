@@ -24,9 +24,11 @@ class GuessNumberClient:
         self.left_frame.pack_propagate(False)
 
         # View history
-        self.show_history = ttk.Treeview(self.left_frame, columns=('Guess', 'Result'), show='headings')
+        self.show_history = ttk.Treeview(self.left_frame, columns=('Player', 'Guess', 'Result'), show='headings')
+        self.show_history.heading('Player', text='Player')
         self.show_history.heading('Guess', text='Guess')
         self.show_history.heading('Result', text='Result')
+        self.show_history.column('Player', width=100, anchor='center')
         self.show_history.column('Guess', width=100, anchor='center')
         self.show_history.column('Result', width=100, anchor='center')
         self.show_history.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
@@ -74,8 +76,8 @@ class GuessNumberClient:
             self.status_label.config(text=f"Send error: {e}", fg="red")
             self.disconnect()
     
-    def update_history(self, guess, result):
-        self.root.after(0, lambda: self.show_history.insert('', 0, values=(guess, result)))
+    def update_history(self, player, guess, result):
+        self.root.after(0, lambda: self.show_history.insert('', 'end', values=(player, guess, result)))
     def connect_server(self):
         try:
             self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -91,9 +93,15 @@ class GuessNumberClient:
             try:
                 feedback = self.client_socket.recv(1024).decode('utf-8')
                 print(f"Received message: {feedback}")
-                
-                if "guessed the correct number" in feedback:
+                if "It's not your turn" in feedback:
+                    self.guess_input.config(state=tk.DISABLED)
+                    self.status_label.config(text="It's not your turn. Please wait.", fg="red")
+                elif "Your turn" in feedback:
+                    self.guess_input.config(state=tk.NORMAL)
+                    self.status_label.config(text="It's your turn. Please make a guess.", fg="green")
+                if "guessed the correct number" in feedback:    
                     parts = feedback.split("|")
+                    player = parts[0].split(" ")[0] 
                     ans = parts[1] if len(parts) > 1 else "Unknown"
                     self.status_label.config(text=f"Game Over! {parts[0]}", fg="blue")
                     self.guess_input.config(state=tk.DISABLED)
@@ -105,8 +113,9 @@ class GuessNumberClient:
                     parts = feedback.split("|")
                     guess_info = parts[0] 
                     result = parts[1] if len(parts) > 1 else "Unknown"
+                    player = guess_info.split(" ")[0]
                     guess = guess_info.split(": ")[1]
-                    self.update_history(guess, result)
+                    self.update_history(player, guess, result)
                 
                 else:
                     self.status_label.config(text=feedback, fg="black")
@@ -114,6 +123,7 @@ class GuessNumberClient:
             except Exception as e:
                 self.status_label.config(text=f"Receive error: {e}", fg="red")
                 break
+
 
     
     def disconnect(self):
