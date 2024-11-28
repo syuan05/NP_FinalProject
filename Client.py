@@ -92,7 +92,7 @@ class GuessNumberClient:
                 feedback = self.client_socket.recv(1024).decode('utf-8')
                 print(f"Received message: {feedback}")
                 
-                if "guessed the correct number" in feedback:  # 游戏结束
+                if "guessed the correct number" in feedback:
                     parts = feedback.split("|")
                     ans = parts[1] if len(parts) > 1 else "Unknown"
                     self.status_label.config(text=f"Game Over! {parts[0]}", fg="blue")
@@ -101,14 +101,14 @@ class GuessNumberClient:
                     messagebox.showinfo("Game Over", f"The correct number was: {ans}")
                     break
                 
-                elif "guess:" in feedback:  # 普通猜测结果
+                elif "guess:" in feedback:
                     parts = feedback.split("|")
-                    guess_info = parts[0]  # 包括 addr 和 guess
+                    guess_info = parts[0] 
                     result = parts[1] if len(parts) > 1 else "Unknown"
-                    guess = guess_info.split(": ")[1]  # 提取 guess 值
+                    guess = guess_info.split(": ")[1]
                     self.update_history(guess, result)
                 
-                else:  # 未知消息
+                else:
                     self.status_label.config(text=feedback, fg="black")
             
             except Exception as e:
