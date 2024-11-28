@@ -12,11 +12,12 @@ clients = []
 clients_lock = threading.Lock()
 
 def broadcast(message, sender_client=None):
+    print(f"Broadcasting message: {message}")
     with clients_lock:
         for client in clients:
-            if clients != sender_client:
+            if client != sender_client:
                 try:
-                    client.sendall(message).encode('utf-8')
+                    client.sendall(message.encode('utf-8'))
                 except:
                     clients.remove(client)
                 
@@ -24,7 +25,7 @@ def game_start(client, addr):
     with clients_lock:
         clients.append(client)
     while True:
-        receive = client.recv(1024)
+        receive = client.recv(1024).decode('utf-8')
         num = int(receive)
         guess = [0] * 4
         digit = 1000
@@ -32,9 +33,7 @@ def game_start(client, addr):
         BCount = 0
         guess_used = [False] * 4
         ans_used = [False] * 4
-        print(f"Receive {num}")
-        if num == 1:
-            print(f"{ans}\ngame end")
+        print(f"Receive {num} from {addr}")
         for i in range(4):
             guess[i] = num // digit
             num %= digit
@@ -53,14 +52,14 @@ def game_start(client, addr):
                         ans_used[j] = True
                         break
         if ACount == 4:
-            msg = f"{addr} guess the correct number!\nAns: {ans}"
+            msg = f"{addr} guessed the correct number!|Ans: {ans}"  # 用 | 分隔
             broadcast(msg, client)
-            client.sendall(f"You guess the correct number!".encode('utf-8'))
+            client.sendall(msg.encode('utf-8'))
             break
         else:
-            msg = f"{addr} guess: {guess} \nA:{ACount} B:{BCount}"
+            msg = f"{addr} guess: {guess}|A:{ACount} B:{BCount}"
             broadcast(msg, client)
-            client.sendall(f"your guess: {guess} \nA:{ACount} B:{BCount}".encode('utf-8'))
+            client.sendall(f"your guess: {guess}|A:{ACount} B:{BCount}".encode('utf-8'))
     client.close()
 
 def main():

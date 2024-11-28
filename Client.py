@@ -75,7 +75,7 @@ class GuessNumberClient:
             self.disconnect()
     
     def update_history(self, guess, result):
-        self.show_history.insert('', 0, values=(guess, result))
+        self.root.after(0, lambda: self.show_history.insert('', 0, values=(guess, result)))
     def connect_server(self):
         try:
             self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -90,21 +90,27 @@ class GuessNumberClient:
         while True:
             try:
                 feedback = self.client_socket.recv(1024).decode('utf-8')
-                if "guess" in feedback.lower():
-                    parts = feedback.split('\n')
-                    guess = parts[0]
-                    result = parts[1] if len(parts) > 1 else ""
-                    self.update_history(guess, result)
-                if 'correct' in feedback:
-                    break
-                if "correct number" in feedback.lower():
-                    self.status_label.config(text="You won! Game over.", fg="green")
+                print(f"Received message: {feedback}")
+                
+                if "guessed the correct number" in feedback:  # 游戏结束
+                    parts = feedback.split("|")
+                    ans = parts[1] if len(parts) > 1 else "Unknown"
+                    self.status_label.config(text=f"Game Over! {parts[0]}", fg="blue")
                     self.guess_input.config(state=tk.DISABLED)
                     self.send_button.config(state=tk.DISABLED)
-                    messagebox.showinfo("Congratulations!", "You guessed the correct number!")
+                    messagebox.showinfo("Game Over", f"The correct number was: {ans}")
                     break
-                else:
+                
+                elif "guess:" in feedback:  # 普通猜测结果
+                    parts = feedback.split("|")
+                    guess_info = parts[0]  # 包括 addr 和 guess
+                    result = parts[1] if len(parts) > 1 else "Unknown"
+                    guess = guess_info.split(": ")[1]  # 提取 guess 值
+                    self.update_history(guess, result)
+                
+                else:  # 未知消息
                     self.status_label.config(text=feedback, fg="black")
+            
             except Exception as e:
                 self.status_label.config(text=f"Receive error: {e}", fg="red")
                 break
