@@ -78,6 +78,7 @@ def main():
         client, add = srvSocket.accept()
         client_thread = threading.Thread(target=game_start, args=(client, add))
         client_thread.start()
+        print(f"{add} has connect.")
 
 if __name__ == '__main__':
     main()
