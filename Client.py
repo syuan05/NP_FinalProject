@@ -1,8 +1,10 @@
+import os
 import socket
 import threading
 import tkinter as tk
 from tkinter import ttk, messagebox
 
+USER_FILE = "users.txt"
 
 class GuessNumberClient:
     def __init__(self, root):
@@ -12,8 +14,70 @@ class GuessNumberClient:
         
         self.server_ip = '127.0.0.1'
         self.port = 54321
-        self.create_ui()
-        self.connect_server()
+        self.client_socket = None
+        self.username = None
+
+        self.login_window()
+
+    def login_window(self):
+        # self.login_win = tk.Toplevel(self.root)
+        # self.login_win.title("Login/Register")
+        
+        tk.Label(self.root, text="Username:").pack(pady=5)
+        self.username_input = tk.Entry(self.root)
+        self.username_input.pack(pady=5)
+
+        tk.Label(self.root, text="Password:").pack(pady=5)
+        self.password_input = tk.Entry(self.root, show="*")
+        self.password_input.pack(pady=5)
+
+        tk.Button(self.root, text="Login", command=self.login).pack(pady=5)
+        tk.Button(self.root, text="Register", command=self.register).pack(pady=5)
+    
+    def login(self):
+        username = self.username_input.get()
+        password = self.password_input.get()
+
+        if not username or not password:
+            messagebox.showwarning("Input Error", "Please fill the username or password.")
+            return
+        if not os.path.exists(USER_FILE):
+            messagebox.showerror("Error", "No users found. Please register first.")
+            return
+        
+        with open(USER_FILE, "r") as file:
+            for line in file:
+                stored_username, stored_password = line.strip().split("|")
+                if username == stored_username and password == stored_password:
+                    self.username = username
+                    messagebox.showinfo("Success", "Login successful!")
+                    self.clear_window()
+                    self.connect_server()
+                    self.create_ui()
+                    return
+
+        messagebox.showerror("Error", "Invalid username or password.")
+
+    def register(self):
+        username = self.username_input.get()
+        password = self.password_input.get()
+
+        if not username or not password:
+            messagebox.showwarning("Input Error", "Please fill in all fields.")
+            return
+
+        if os.path.exists(USER_FILE):
+            with open(USER_FILE, "r") as file:
+                for line in file:
+                    stored_username, _ = line.strip().split("|")
+                    if username == stored_username:
+                        messagebox.showerror("Error", "Username already exists.")
+                        return
+
+        with open(USER_FILE, "a") as file:
+            file.write(f"{username}|{password}\n")
+        
+        messagebox.showinfo("Success", "Registration successful! You can now log in.")
 
     def create_ui(self):
         self.main_frame = tk.Frame(self.root)
@@ -123,7 +187,9 @@ class GuessNumberClient:
             except Exception as e:
                 self.status_label.config(text=f"Receive error: {e}", fg="red")
                 break
-
+    def clear_window(self):
+        for widget in self.root.winfo_children():
+            widget.destroy()
 
     
     def disconnect(self):

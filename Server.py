@@ -76,6 +76,7 @@ class GameServer:
         self.srv_socket.bind(('', self.port))
         self.srv_socket.listen(5)
         while True:
+            print("Waiting for connect...")
             client, add = self.srv_socket.accept()
             client_thread = threading.Thread(target=self.game_start, args=(client, add))
             client_thread.start()
