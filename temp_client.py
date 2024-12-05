@@ -1,145 +1,198 @@
+import os
 import socket
-import threading
 import tkinter as tk
 from tkinter import ttk, messagebox
+import struct
 
+USER_FILE = "users.txt"
+BUFF: int = 1024
 
 class GuessNumberClient:
-    def __init__(self, root):
+    def __init__(self, root:tk.Tk ):
         self.root = root
-        self.root.title("1A2B 猜數字遊戲")
-        self.server_ip = '127.0.0.1'
-        self.port = 54321
-        self.client_socket = None
-        self.game_mode = None  # 儲存玩家選擇的遊戲模式
-        self.is_connected = False  # 追蹤連線狀態
-        self.status_label = None  # 初始化為 None，避免未定義錯誤
-        self.create_mode_selection_ui()  # 創建模式選擇介面
+        self.root.title("1A2B")
+        self.root.geometry("600x600")
+        self.server_ip: str = '127.0.0.1'
+        self.port: int = 54321
+        self.client_socket: socket.socket | None = None
+        self.username: str|None = None
+        self.msg: str|None = None
+        self.mode: int = 0
+        self.isLogin: bool = False
+        self.isRegister: bool = False
+        self.login_window()
 
-    # 選擇遊戲模式介面
-    def create_mode_selection_ui(self):
-        self.mode_frame = tk.Frame(self.root)
-        self.mode_frame.pack(padx=20, pady=20)
+    def login_window(self):
+        tk.Label(self.root, text="Username:").pack(pady=5)
+        self.username_input = tk.Entry(self.root)
+        self.username_input.pack(pady=5)
+        tk.Label(self.root, text="Password:").pack(pady=5)
+        self.password_input = tk.Entry(self.root, show="*")
+        self.password_input.pack(pady=5)
+        tk.Button(self.root, text="Login", command=self.login).pack(pady=5)
+        tk.Button(self.root, text="Register", command=self.register).pack(pady=5)
+    
+    def login(self):
+        self.mode = 0
+        self.username = self.username_input.get()
+        password = self.password_input.get()
+        username_len = len(self.username)
+        password_len = len(password)
 
-        tk.Label(self.mode_frame, text="選擇遊戲模式：", font=("Arial", 14)).pack(pady=10)
+        if not self.username or not password:
+            messagebox.showwarning("Input Error", "Please fill the username or password.")
+            return
+        
+        data: bytes = struct.pack(f"!iII{username_len}s{password_len}s",self.mode,username_len,password_len,self.username.encode('utf-8'),password.encode("utf-8"))
+        self.clear_window()
+        self.connect_server(data)
+        if self.isLogin and self.username:
+            self.create_ui()
+            self.msg = None
+        if not self.isLogin and self.msg:
+            messagebox.showerror("Error", self.msg)
+            self.login_window()
+            self.msg = None
 
-        # 單機模式按鈕
-        single_button = tk.Button(self.mode_frame, text="單機模式", command=lambda: self.set_game_mode(1))
-        single_button.pack(fill=tk.X, pady=5)
+    def register(self):
+        self.mode = 1 
+        username = self.username_input.get()
+        password = self.password_input.get()
+        username_len = len(username)
+        password_len = len(password)
 
-        # 雙人競速按鈕
-        race_button = tk.Button(self.mode_frame, text="雙人競速", command=lambda: self.set_game_mode(2))
-        race_button.pack(fill=tk.X, pady=5)
+        if not username or not password:
+            messagebox.showwarning("Input Error", "Please fill in all fields.")
+            return
+        
+        data: bytes = struct.pack(f"!iII{username_len}s{password_len}s",self.mode,username_len,password_len,username.encode('utf-8'),password.encode("utf-8"))
+        self.clear_window()
+        self.connect_server(data)
+        if self.isRegister:
+            messagebox.showinfo("Success", "Registration successful! You can now log in.")
+            self.login_window()
+            self.isRegister = False
+            self.msg = None
+        elif not self.isRegister and self.msg:
+            messagebox.showerror("Error", self.msg)
+            self.login_window()
+            self.msg = None   
 
-        # 雙人PK按鈕
-        pk_button = tk.Button(self.mode_frame, text="雙人PK", command=lambda: self.set_game_mode(3))
-        pk_button.pack(fill=tk.X, pady=5)
+    def create_ui(self):
+        self.main_frame = tk.Frame(self.root)
+        self.main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        
+        self.left_frame = tk.Frame(self.main_frame, width=300, relief=tk.SUNKEN, borderwidth=1)
+        self.left_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 5))
+        self.left_frame.pack_propagate(False)
+        self.show_history = ttk.Treeview(self.left_frame, columns=('Player', 'Guess', 'Result'), show='headings')
+        self.show_history.heading('Player', text='Player')
+        self.show_history.heading('Guess', text='Guess')
+        self.show_history.heading('Result', text='Result')
+        self.show_history.column('Player', width=100, anchor='center')
+        self.show_history.column('Guess', width=100, anchor='center')
+        self.show_history.column('Result', width=100, anchor='center')
+        self.show_history.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
 
-    # 設定遊戲模式並開始遊戲
-    def set_game_mode(self, mode):
-        self.game_mode = mode
-        self.mode_frame.destroy()  # 刪除模式選擇畫面
-        self.connect_server()  # 連接伺服器並初始化遊戲
+        self.history_scrollbar = ttk.Scrollbar(self.left_frame, orient=tk.VERTICAL, command=self.show_history.yview)
+        self.show_history.configure(yscrollcommand=self.history_scrollbar.set)
+        self.history_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
-    # 建立遊戲主介面
-    def create_game_ui(self):
-        self.frame = tk.Frame(self.root)
-        self.frame.pack(padx=10, pady=10)
+        self.right_frame = tk.Frame(self.main_frame, width=300)
+        self.right_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=(5,0))
+        self.right_frame.pack_propagate(False)
 
-        # 歷史記錄顯示
-        self.history = ttk.Treeview(self.frame, columns=('Guess', 'Result'), show='headings')
-        self.history.heading('Guess', text='猜測數字')
-        self.history.heading('Result', text='結果')
-        self.history.pack(pady=5)
+        self.title_label = tk.Label(self.main_frame, text="1A2B", font=('Arial', 16))
+        self.title_label.pack(padx=10)
 
-        # 輸入框與按鈕
-        self.input_label = tk.Label(self.frame, text="輸入你的猜測：")
-        self.input_label.pack()
+        self.input_frame = tk.Frame(self.right_frame)
+        self.input_frame.pack(pady=5)
 
-        self.guess_entry = tk.Entry(self.frame)
-        self.guess_entry.pack(pady=5)
-        self.guess_entry.bind('<Return>', self.send_guess)
+        self.guess_label = tk.Label(self.input_frame, text="Enter a number")
+        self.guess_label.pack(side=tk.LEFT, padx=5)
 
-        self.send_button = tk.Button(self.frame, text="送出", command=self.send_guess)
-        self.send_button.pack(pady=5)
+        self.guess_input = tk.Entry(self.input_frame, width=10, font=('Arial', 12))
+        self.guess_input.pack(side=tk.LEFT, padx=5)
+        self.guess_input.bind('<Return>', self.send_guess)
 
-        # 狀態標籤
-        self.status_label = tk.Label(self.frame, text="", font=("Arial", 12))
-        self.status_label.pack()
+        self.send_button = tk.Button(self.input_frame, text='Send', command=self.send_guess)
+        self.send_button.pack(side=tk.LEFT, padx=5)
 
-        # 離開按鈕
-        self.exit_button = tk.Button(self.frame, text="離開遊戲", command=self.disconnect)
-        self.exit_button.pack(pady=5)
-
-    # 連接伺服器
-    def connect_server(self):
+        self.status_label = tk.Label(self.right_frame, text="", font=('Arial', 10))
+        self.status_label.pack(pady=10)
+    
+    def send_guess(self, event=None):
+        self.msg = None
+        try:
+            guess = self.guess_input.get()
+            if not guess.isdigit() or len(guess) != 4:
+                messagebox.showwarning("Error input", "Please enter a 4-digit number")
+                return
+            self.client_socket.sendall(guess.encode('utf-8'))
+            self.receive_message()
+            self.guess_input.delete(0, tk.END)      # Clear input
+        except Exception as e:
+            self.status_label.config(text=f"Send error: {e}", fg="red")
+            self.disconnect()
+    
+    def update_history(self, player, guess, result):
+        self.root.after(0, lambda: self.show_history.insert('', 'end', values=(player, guess, result)))
+        
+    def connect_server(self, wantSend: bytes):
         try:
             self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.client_socket.connect((self.server_ip, self.port))
-            self.is_connected = True
-            threading.Thread(target=self.receive_messages, daemon=True).start()
-
-            # 傳送玩家選擇的遊戲模式到伺服器
-            self.client_socket.sendall(f"MODE:{self.game_mode}".encode('utf-8'))
-            self.create_game_ui()  # 建立遊戲主介面
+            self.client_socket.sendall(wantSend)
+            self.receive_message()
+            
         except Exception as e:
-            messagebox.showerror("連線錯誤", f"無法連接到伺服器：{e}")
+            messagebox.showerror("Connection error", str(e))
             self.root.quit()
-
-    # 傳送猜測
-    def send_guess(self, event=None):
-        guess = self.guess_entry.get().strip()
-        if len(guess) != 4 or not guess.isdigit() or len(set(guess)) != 4:
-            messagebox.showwarning("輸入無效", "請輸入 4 位不重複的數字。")
-            return
-        try:
-            self.client_socket.sendall(guess.encode('utf-8'))
-            self.guess_entry.delete(0, tk.END)
-        except Exception as e:
-            if self.status_label:
-                self.status_label.config(text=f"傳送錯誤：{e}", fg="red")
-            self.disconnect()
-
-    # 接收來自伺服器的訊息
-    def receive_messages(self):
-        while self.is_connected:
+            
+    def receive_message(self):
+        while self.msg is None:
             try:
-                message = self.client_socket.recv(1024).decode('utf-8')
-                if "恭喜" in message or "遊戲結束" in message:
-                    if self.status_label:
-                        self.status_label.config(text=message, fg="green")
-                    messagebox.showinfo("遊戲結束", message)
-                    self.disconnect()  # 遊戲結束後自動斷線
-                    break
-                elif ":" in message:  # 假設收到格式為 "猜測:結果"
-                    guess, result = message.split(":")
-                    self.history.insert("", tk.END, values=(guess, result))
-                else:
-                    if self.status_label:
-                        self.status_label.config(text=message)
+                feedback = self.client_socket.recv(BUFF).decode('utf-8')
+                print(f"Received message: {feedback}")
+                
+                if feedback == "Login Success":
+                    self.isLogin = True
+                if feedback == "Register successed":
+                    self.isRegister = True
+                if "guessed the correct number" in feedback:    
+                    parts = feedback.split("|")
+                    player = parts[0].split(" ")[0] 
+                    ans = parts[1] if len(parts) > 1 else "Unknown"
+                    self.status_label.config(text=f"Game Over! {parts[0]}", fg="blue")
+                    self.guess_input.config(state=tk.DISABLED)
+                    self.send_button.config(state=tk.DISABLED)
+                    messagebox.showinfo("Game Over", f"The correct number was: {ans}")
+                    
+                elif "guess:" in feedback:
+                    parts = feedback.split("|")
+                    guess_info = parts[0] 
+                    result = parts[1] if len(parts) > 1 else "Unknown"
+                    player = guess_info.split(" ")[0]
+                    guess = guess_info.split(": ")[1]
+                    self.update_history(player, guess, result)
+                self.msg = feedback
             except Exception as e:
-                if self.status_label:
-                    self.status_label.config(text=f"接收錯誤：{e}", fg="red")
+                self.status_label.config(text=f"Receive error: {e}", fg="red")
                 break
+    def clear_window(self):
+        for widget in self.root.winfo_children():
+            widget.destroy()
 
-    # 斷開連線
+    
     def disconnect(self):
-        if self.is_connected:
-            self.is_connected = False
-            if self.client_socket:
-                try:
-                    self.client_socket.close()
-                except Exception as e:
-                    print(f"關閉連線時發生錯誤：{e}")
+        if self.client_socket:
+            self.client_socket.close()
         self.root.quit()
-
-
-# 啟動主程式
 def main():
-    root = tk.Tk()
-    app = GuessNumberClient(root)
+    root: tk.Tk = tk.Tk()
+    client = GuessNumberClient(root)
     root.mainloop()
 
-
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()
+        
