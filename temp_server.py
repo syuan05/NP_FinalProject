@@ -1,156 +1,171 @@
+from io import TextIOWrapper
+import os
+import random
 import socket
 import threading
-import random
-
-server_ip = '127.0.0.1'
-server_port = 54321
-
-clients = []
-client_lock = threading.Lock()
-
-# 驗證猜測是否合法 (4 位不重複數字)
-def is_valid_guess(guess):
-    return len(guess) == 4 and guess.isdigit() and len(set(guess)) == 4
-
-# 計算 1A2B 結果
-def calculate_result(guess, answer):
-    A_count = sum(1 for i in range(4) if guess[i] == answer[i])  # 完全正確的位置與數字
-    B_count = sum(1 for i in range(4) for j in range(4) if guess[i] == answer[j] and i != j)  # 數字正確但位置錯誤
-    return A_count, B_count
-
-# 單機模式邏輯
-def handle_single_mode(client_socket, address):
-    answer = ''.join(random.sample('0123456789', 4))  # 隨機生成 4 位數字
-    client_socket.sendall("單機模式開始！試著猜出 4 位數字，格式如：1234\n".encode('utf-8'))
-
-    while True:
-        guess = client_socket.recv(1024).decode('utf-8').strip()
-        if not is_valid_guess(guess):
-            client_socket.sendall("無效輸入！請輸入 4 位不重複的數字。\n".encode('utf-8'))
-            continue
+import struct
+BUFF = 1024
+class GameServer(threading.Thread):
+    def __init__(self, client: socket.socket, rip: str,rport:int,username: str):
+        super().__init__()
+        self.ans: list[int] = [random.randrange(10) for _ in range(4)]
+        self.client = client
+        self.rip = rip
+        self.rport = rport
+        self.username = username
+        self.start()
         
-        A, B = calculate_result(guess, answer)
-        if A == 4:
-            client_socket.sendall(f"恭喜！你猜對了！答案是 {answer}。\n".encode('utf-8'))
+    def run(self):
+        # 接收帳號名稱
+        port = self.rport
+        addr = f"{self.rip}:{self.rport}"
+        while True:
+            try:
+                receive = self.client.recv(BUFF).decode('utf-8')
+                print("receive: ",receive)
+                num = int(receive)
+                guess = [0] * 4
+                digit = 1000
+                ACount = 0
+                BCount = 0
+                guess_used = [False] * 4
+                ans_used = [False] * 4
+                print(f"Receive {num} from {addr}")
+
+                for i in range(4):
+                    guess[i] = num // digit
+                    num %= digit
+                    digit //= 10
+
+                for i in range(4):
+                    if guess[i] == self.ans[i]:
+                        ACount += 1
+                        ans_used[i] = True
+                        guess_used[i] = True
+
+                for i in range(4):
+                    if not guess_used[i]:
+                        for j in range(4):
+                            if guess[i] == self.ans[j] and not ans_used[j]:
+                                BCount += 1
+                                ans_used[j] = True
+                                break
+
+                if ACount == 4:
+                    msg = f"{self.username} guessed the correct number!|Ans: {self.ans}"
+                    # self.broadcast(msg, client)
+                    self.client.sendall(msg.encode('utf-8'))
+                    break
+                else:
+                    msg = f"{self.username} guess: {guess}|A:{ACount} B:{BCount}"
+                    print(msg)
+                    # self.broadcast(msg, client)
+                    self.client.sendall(msg.encode('utf-8'))
+            except Exception as e:
+                print(f"Error: {e}")
+                break
+        self.client.close()
+class Main:
+    def __init__(self, host:str ='', port: int=54321):
+        self.host = host
+        self.port = port
+        self.srv_socket: socket.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.srv_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    def start(self):
+        self.srv_socket.bind((self.host, self.port))
+        self.srv_socket.listen(5)
+        while True:
+            print("Waiting for connect...")
+            client, (rip,rport) = self.srv_socket.accept()
+            auth_thread = AuthThread("AuthThread",True,client,rip,rport)
+            print(f"{rip}:{rport} has connected.")
+    def close(self):
+            self.srv_socket.close()
+    
+            
+class AuthThread(threading.Thread):
+    def __init__(self,t_name: str, deamon: bool,client_sc: socket.socket,rip: str,rport: int):
+        super().__init__(name=t_name,daemon=deamon)
+        self.client: socket.socket = client_sc
+        self.rip: str = rip
+        self.rport: int = rport
+        self.username: str = None
+        self.password: str = None
+        self.isLogin: bool = False
+        self.mode: int = 0
+        self.UserFile: str = "users.txt"
+        self.file: TextIOWrapper = None
+        self.start()
+    def run(self):
+        msg: bytes = self.client.recv(BUFF)
+        self.UserInfoPaser(msg)
+        match self.mode:
+            case 0:
+                self.login()
+            case 1:
+                self.register()
+    def login(self):
+        self.getUserData_handler("r")
+        msg: str|None = None
+        if self.file is None:
+            msg = "No users found. Please register first.".encode('utf-8')
+        else:
+            for line in self.file:
+                stored_username, stored_password = line.strip().split("|")
+                if self.username == stored_username and self.password == stored_password:
+                    msg = f"Login Success".encode('utf-8')
+                    break
+            else:
+                msg = "Username or Password have Error".encode('utf-8')
+        if msg:
+            self.client.sendall(msg)
+        self.closeUserData_handler()
+        game = GameServer(self.client, self.rip,self.rport,self.username)
+        print(f"Ans: {game.ans}")
+    def register(self):
+        msg: str = None
+        self.getUserData_handler("r",True)
+        for line in self.file:
+            stored_username, _ = line.strip().split("|")
+            if self.username == stored_username:
+                msg = "Username already exists.".encode('utf-8')
             break
         else:
-            client_socket.sendall(f"{A}A{B}B，繼續猜！\n".encode('utf-8'))
-
-    client_socket.close()
-
-# 雙人競速模式邏輯
-def handle_dual_race_mode(player1, player2):
-    answer = ''.join(random.sample('0123456789', 4))  # 隨機生成 4 位數字
-    player1.sendall("雙人競速模式開始！等待對手的回合...\n".encode('utf-8'))
-    player2.sendall("雙人競速模式開始！等待對手的回合...\n".encode('utf-8'))
-
-    turn = 0  # 0 表示玩家1回合，1 表示玩家2回合
-    while True:
-        current_player = player1 if turn == 0 else player2
-        current_player.sendall("你的回合！請輸入 4 位數字：\n".encode('utf-8'))
-
-        guess = current_player.recv(1024).decode('utf-8').strip()
-        if not is_valid_guess(guess):
-            current_player.sendall("無效輸入！請輸入 4 位不重複的數字。\n".encode('utf-8'))
-            continue
+            msg = "Register successed".encode('utf-8')
+        if msg:
+            self.client.sendall(msg)
+        self.getUserData_handler('w+',True)
+        self.file.writelines(f"{self.username}|{self.password}")
+        self.closeUserData_handler()
         
-        A, B = calculate_result(guess, answer)
-        if A == 4:
-            current_player.sendall(f"恭喜！你猜對了！答案是 {answer}。\n".encode('utf-8'))
-            other_player = player2 if turn == 0 else player1
-            other_player.sendall(f"對手已經猜出答案！答案是 {answer}。遊戲結束！\n".encode('utf-8'))
-            break
-        else:
-            current_player.sendall(f"{A}A{B}B，等待對手的回合...\n".encode('utf-8'))
-
-        turn = 1 - turn  # 切換回合
-
-    player1.close()
-    player2.close()
-
-# 雙人PK模式邏輯
-def handle_dual_pk_mode(player1, player2):
-    # 讓玩家分別輸入自己的題目
-    player1.sendall("請輸入你的題目 (4 位不重複數字)：\n".encode('utf-8'))
-    player2.sendall("請輸入你的題目 (4 位不重複數字)：\n".encode('utf-8'))
-
-    answer1 = player1.recv(1024).decode('utf-8').strip()
-    answer2 = player2.recv(1024).decode('utf-8').strip()
-
-    if not is_valid_guess(answer1) or not is_valid_guess(answer2):
-        player1.sendall("題目無效，遊戲結束！\n".encode('utf-8'))
-        player2.sendall("題目無效，遊戲結束！\n".encode('utf-8'))
-        player1.close()
-        player2.close()
-        return
-
-    player1.sendall("你的題目已設定。等待對手猜測...\n".encode('utf-8'))
-    player2.sendall("你的題目已設定。等待對手猜測...\n".encode('utf-8'))
-
-    turn = 0  # 0 表示玩家1猜測，1 表示玩家2猜測
-    while True:
-        current_player = player1 if turn == 0 else player2
-        opponent_answer = answer2 if turn == 0 else answer1
-
-        current_player.sendall("你的回合！請輸入 4 位數字：\n".encode('utf-8'))
-        guess = current_player.recv(1024).decode('utf-8').strip()
-
-        if not is_valid_guess(guess):
-            current_player.sendall("無效輸入！請輸入 4 位不重複的數字。\n".encode('utf-8'))
-            continue
-        
-        A, B = calculate_result(guess, opponent_answer)
-        if A == 4:
-            current_player.sendall(f"恭喜！你猜對了！對方的答案是 {opponent_answer}。\n".encode('utf-8'))
-            other_player = player2 if turn == 0 else player1
-            other_player.sendall(f"對手已經猜出你的答案！答案是 {opponent_answer}。遊戲結束！\n".encode('utf-8'))
-            break
-        else:
-            current_player.sendall(f"{A}A{B}B，等待對手的回合...\n".encode('utf-8'))
-
-        turn = 1 - turn  # 切換回合
-
-    player1.close()
-    player2.close()
-
-# 處理客戶端連線
-def handle_client(client_socket, address):
-    client_socket.sendall("歡迎來到 1A2B 猜數字遊戲！\n請選擇模式：\n1. 單機模式\n2. 雙人競速\n3. 雙人PK\n".encode('utf-8'))
-    mode = client_socket.recv(1024).decode('utf-8').strip()
-
-    if mode == "1":
-        handle_single_mode(client_socket, address)
-    elif mode == "2":
-        with client_lock:
-            clients.append(client_socket)
-            if len(clients) >= 2:
-                player1 = clients.pop(0)
-                player2 = clients.pop(0)
-                threading.Thread(target=handle_dual_race_mode, args=(player1, player2)).start()
-    elif mode == "3":
-        with client_lock:
-            clients.append(client_socket)
-            if len(clients) >= 2:
-                player1 = clients.pop(0)
-                player2 = clients.pop(0)
-                threading.Thread(target=handle_dual_pk_mode, args=(player1, player2)).start()
-    else:
-        client_socket.sendall("無效的模式選擇，請重新連線。\n".encode('utf-8'))
-        client_socket.close()
-
-# 主伺服器程式
-def main():
-    server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    server_socket.bind((server_ip, server_port))
-    server_socket.listen(5)
-    print(f"伺服器已啟動，等待連線... (IP: {server_ip}, Port: {server_port})")
-
-    while True:
-        client_socket, address = server_socket.accept()
-        print(f"新的連線：{address}")
-        threading.Thread(target=handle_client, args=(client_socket, address)).start()
-
-
-if __name__ == "__main__":
-    main()
+    def UserInfoPaser(self,form: bytes):
+        header_format = "!iII"
+        header_size = struct.calcsize(header_format)
+        self.mode, username_len, password_len = struct.unpack(header_format,form[:header_size])
+        userInfo_format = f"{username_len}s{password_len}s"
+        username_bytes, password_bytes = struct.unpack(userInfo_format,form[header_size:])
+        self.username: str = username_bytes.decode('utf-8')
+        self.password: str = password_bytes.decode('utf-8')
+    def getUserData_handler(self,mode: str,CanCreate: bool = False):
+        if self.file:
+            self.file.close()
+        if CanCreate:
+            if not os.path.exists(self.UserFile):
+                open(self.UserFile,'w').close()
+        try:
+            self.file = open(self.UserFile,mode)
+        except FileNotFoundError:
+            self.file = None
+    def closeUserData_handler(self):
+        if self.file:
+            self.file.close()
+                    
+    
+            
+if __name__ == '__main__':
+    mainThread = Main()
+    try:
+        mainThread.start()
+    except KeyboardInterrupt:
+        print("Server close")
+        mainThread.close()
