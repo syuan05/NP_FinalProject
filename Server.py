@@ -71,6 +71,7 @@ class Main:
         self.port = port
         self.srv_socket: socket.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.srv_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        
     def start(self):
         self.srv_socket.bind((self.host, self.port))
         self.srv_socket.listen(5)
@@ -96,8 +97,11 @@ class AuthThread(threading.Thread):
         self.UserFile: str = "users.txt"
         self.file: TextIOWrapper = None
         self.start()
+        
+        
     def run(self):
         msg: bytes = self.client.recv(BUFF)
+        multiplayer_manager = Multiplayer()
         self.UserInfoPaser(msg)
         match self.mode:
             case 0:
@@ -129,13 +133,13 @@ class AuthThread(threading.Thread):
             stored_username, _ = line.strip().split("|")
             if self.username == stored_username:
                 msg = "Username already exists.".encode('utf-8')
-            break
+                break
         else:
             msg = "Register successed".encode('utf-8')
         if msg:
             self.client.sendall(msg)
-        self.getUserData_handler('w+',True)
-        self.file.writelines(f"{self.username}|{self.password}")
+        self.getUserData_handler('a',True)
+        self.file.write(f"{self.username}|{self.password}\n")
         self.closeUserData_handler()
         
     def UserInfoPaser(self,form: bytes):
@@ -161,7 +165,81 @@ class AuthThread(threading.Thread):
             self.file.close()
                     
     
+class Multiplayer:
+    def __init__(self):
+        self.waiting_players = []
+        self.games = []
+        
+    def add_player(self, client, username):
+        "add player in queue"
+        self.waiting_players.append((client,username))
+        if len(self.waiting_players) >= 2:
+            self.start_game()
             
+    def start_game(self):
+        "start to set up multiplyer"
+        player1 = self.waiting_players.pop(0) # first player
+        player2 = self.waiting_players.pop(0) # second player
+        
+        #init game logic
+        game = MultiplayerGame(player1,player2)
+        self.games.append(game)
+        game.start()
+        
+class MultiplayerGame(threading.Thread):
+    def __init__(self, player1, player2):
+        super().__init__()
+        self.player1 = player1
+        self.player2 = player2
+        self.players = {player1[0]: player1[1], player2[0]: player2[1]}
+        self.sockets = [player1[0], [player2[0]]]
+        self.turn:int = 0 # play turn 0:player1, 1:player2
+        self.running:bool = True
+        
+    def run(self):
+        "run game logic"
+        try:
+            while self.running:
+                # infrom player
+                current_socket = self.sockets[self.turn]
+                current_socket.sendall("Your turn".encode('utf-8'))
+                
+                #get player input
+                data = current_socket.recv(1024).decode("utf-8")
+                if data == "exit":
+                    self.running = False
+                    break
+                
+                # handle player logic
+                msg = f"{self.players[current_socket]}: {data}"
+                self.broadcast(msg)
+                
+                #switch turn
+                self.turn = 1 - self.turn    
+                    
+        except Exception as e:
+            print(f"Error in game: {e}")
+        finally:
+            self.end_game()
+            
+    def broadcast(self, msg):
+        """將訊息廣播給所有玩家"""
+        for sock in self.sockets:
+            try:
+                sock.sendall(msg.encode('utf-8'))
+            except:
+                pass
+
+    def end_game(self):
+        """結束遊戲"""
+        for sock in self.sockets:
+            try:
+                sock.sendall("Game Over".encode('utf-8'))
+                sock.close()
+            except:
+                pass
+        self.running = False
+                
 if __name__ == '__main__':
     mainThread = Main()
     try:

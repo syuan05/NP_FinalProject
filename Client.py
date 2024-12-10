@@ -17,10 +17,11 @@ class GuessNumberClient:
         self.client_socket: socket.socket | None = None
         self.username: str|None = None
         self.msg: str|None = None
-        self.mode: int = 0
+        self.mode: int = 0   # 0 login 1 register
         self.isLogin: bool = False
         self.isRegister: bool = False
         self.login_window()
+        
 
     def login_window(self):
         tk.Label(self.root, text="Username:").pack(pady=5)
@@ -43,15 +44,16 @@ class GuessNumberClient:
             messagebox.showwarning("Input Error", "Please fill the username or password.")
             return
         
+        # 封包
         data: bytes = struct.pack(f"!iII{username_len}s{password_len}s",self.mode,username_len,password_len,self.username.encode('utf-8'),password.encode("utf-8"))
         self.clear_window()
         self.connect_server(data)
         if self.isLogin and self.username:
-            self.create_ui()
+            self.mode_ui()  #進到選擇模式UI
             self.msg = None
         if not self.isLogin and self.msg:
             messagebox.showerror("Error", self.msg)
-            self.login_window()
+            self.login_window()  
             self.msg = None
 
     def register(self):
@@ -78,7 +80,21 @@ class GuessNumberClient:
             self.login_window()
             self.msg = None   
 
-    def create_ui(self):
+    def mode_ui(self):
+        self.main_frame = tk.Frame(self.root)
+        self.main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+
+        # 創建單機模式按鈕
+        self.single_button = tk.Button(self.main_frame, text="單機模式", command=self.single_create_ui)
+        self.single_button.pack(pady=10)
+
+        # 創建雙人模式按鈕
+        self.multi_player_button = tk.Button(self.main_frame, text="雙人模式", command=self.wait_for_challenger)
+        self.multi_player_button.pack(pady=10)
+
+        
+    def single_create_ui(self):
+        self.clear_window()
         self.main_frame = tk.Frame(self.root)
         self.main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
         
@@ -120,6 +136,61 @@ class GuessNumberClient:
 
         self.status_label = tk.Label(self.right_frame, text="", font=('Arial', 10))
         self.status_label.pack(pady=10)
+        
+    def multi_create_ui(self):
+        self.clear_window()
+        self.main_frame = tk.Frame(self.root)
+        self.main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        
+        self.left_frame = tk.Frame(self.main_frame, width=300, relief=tk.SUNKEN, borderwidth=1)
+        self.left_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 5))
+        self.left_frame.pack_propagate(False)
+        
+        self.show_history = ttk.Treeview(self.left_frame, columns=('Player', 'Guess', 'Result'), show='headings')
+        self.show_history.heading('Player', text='Player')
+        self.show_history.heading('Guess', text='Guess')
+        self.show_history.heading('Result', text='Result')
+        self.show_history.column('Player', width=100, anchor='center')
+        self.show_history.column('Guess', width=100, anchor='center')
+        self.show_history.column('Result', width=100, anchor='center')
+        self.show_history.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+
+        self.history_scrollbar = ttk.Scrollbar(self.left_frame, orient=tk.VERTICAL, command=self.show_history.yview)
+        self.show_history.configure(yscrollcommand=self.history_scrollbar.set)
+        self.history_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        self.right_frame = tk.Frame(self.main_frame, width=300)
+        self.right_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=(5,0))
+        self.right_frame.pack_propagate(False)
+
+        self.title_label = tk.Label(self.main_frame, text="1A2B - Multiplayer Mode", font=('Arial', 16))
+        self.title_label.pack(padx=10)
+
+        self.input_frame = tk.Frame(self.right_frame)
+        self.input_frame.pack(pady=5)
+
+        self.guess_label = tk.Label(self.input_frame, text="Enter a number")
+        self.guess_label.pack(side=tk.LEFT, padx=5)
+
+        self.guess_input = tk.Entry(self.input_frame, width=10, font=('Arial', 12))
+        self.guess_input.pack(side=tk.LEFT, padx=5)
+        self.guess_input.bind('<Return>', self.send_guess)
+
+        self.send_button = tk.Button(self.input_frame, text='Send', command=self.send_guess)
+        self.send_button.pack(side=tk.LEFT, padx=5)
+
+        self.status_label = tk.Label(self.right_frame, text="", font=('Arial', 10))
+        self.status_label.pack(pady=10)
+
+
+    def wait_for_challenger(self):
+        self.main_frame.pack_forget()
+        
+        waiting_label = tk.Label(self.root, text="等待對手連線...")
+        waiting_label.pack(pady=20)
+        
+        #啟動伺服器並處理連線
+        #連到後要幹嘛
     
     def send_guess(self, event=None):
         self.msg = None
@@ -176,6 +247,9 @@ class GuessNumberClient:
                     guess = guess_info.split(": ")[1]
                     self.update_history(player, guess, result)
                 self.msg = feedback
+            except socket.timeout:
+                self.status_label.config(text="Connection timed out, please try again.", fg="red")
+                break
             except Exception as e:
                 self.status_label.config(text=f"Receive error: {e}", fg="red")
                 break
@@ -195,4 +269,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-        
