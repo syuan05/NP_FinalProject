@@ -1,6 +1,9 @@
+import os
 import random
 import socket
 import threading
+
+USER_FILE = "users.txt"
 
 class GameServer:
     def __init__(self, host='127.0.0.1', port=54321):
@@ -22,7 +25,62 @@ class GameServer:
                     except:
                         self.clients.remove(client)
 
+    def handle_login(self, client):
+        try:
+            while True:
+                data = client.recv(1024).decode('utf-8')
+                if not data:
+                    break
+                
+                command, username, password = data.split("|")
+
+                if command == "REGISTER":
+                    if self.register_user(username, password):
+                        client.sendall("REGISTER_SUCCESS|Registration successful!".encode('utf-8'))
+                    else:
+                        client.sendall("REGISTER_FAILED|Username already exists.".encode('utf-8'))
+
+                elif command == "LOGIN":
+                    if self.validate_login(username, password):
+                        client.sendall("LOGIN_SUCCESS|Login successful!".encode('utf-8'))
+                        return username
+                    else:
+                        client.sendall("LOGIN_FAILED|Invalid username or password.".encode('utf-8'))
+                else:
+                    client.sendall("ERROR|Unknown command.".encode('utf-8'))
+        except Exception as e:
+            print(f"Login/Register error: {e}")
+        return None
+
+    def register_user(self, username, password):
+        if os.path.exists(USER_FILE):
+            with open(USER_FILE, "r") as file:
+                for line in file:
+                    stored_username, _ = line.strip().split("|")
+                    if username == stored_username:
+                        return False 
+
+        with open(USER_FILE, "a") as file:
+            file.write(f"{username}|{password}\n")
+        return True
+
+    def validate_login(self, username, password):
+        if os.path.exists(USER_FILE):
+            with open(USER_FILE, "r") as file:
+                for line in file:
+                    stored_username, stored_password = line.strip().split("|")
+                    if username == stored_username and password == stored_password:
+                        return True 
+        return False
+
     def game_start(self, client, addr):
+        username = self.handle_login(client)
+        if not username:
+            print(f"Client {addr} failed to log in.")
+            client.close()
+            return
+        
+        print(f"User '{username}' from {addr} has logged in.")
         port = addr[1]
         with self.clients_lock:
             self.clients.append(client)
@@ -30,6 +88,9 @@ class GameServer:
         while True:
             try:
                 receive = client.recv(1024).decode('utf-8')
+                if not receive:
+                    break
+
                 num = int(receive)
                 guess = [0] * 4
                 digit = 1000
@@ -59,12 +120,12 @@ class GameServer:
                                 break
 
                 if ACount == 4:
-                    msg = f"{port} guessed the correct number!|Ans: {self.ans}"
+                    msg = f"{username} guessed the correct number!|Ans: {self.ans}"
                     self.broadcast(msg, client)
                     client.sendall(msg.encode('utf-8'))
                     break
                 else:
-                    msg = f"{port} guess: {guess}|A:{ACount} B:{BCount}"
+                    msg = f"{username} guess: {guess}|A:{ACount} B:{BCount}"
                     self.broadcast(msg, client)
                     client.sendall(msg.encode('utf-8'))
             except Exception as e:
@@ -75,12 +136,13 @@ class GameServer:
     def start(self):
         self.srv_socket.bind(('', self.port))
         self.srv_socket.listen(5)
+        print("Server started. Waiting for connections...")
+
         while True:
-            print("Waiting for connect...")
-            client, add = self.srv_socket.accept()
-            client_thread = threading.Thread(target=self.game_start, args=(client, add))
+            client, addr = self.srv_socket.accept()
+            print(f"{addr} has connected.")
+            client_thread = threading.Thread(target=self.game_start, args=(client, addr))
             client_thread.start()
-            print(f"{add} has connected.")
             
 if __name__ == '__main__':
     server = GameServer()
