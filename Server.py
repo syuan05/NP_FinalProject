@@ -90,7 +90,6 @@ class GameServer:
                 receive = client.recv(1024).decode('utf-8')
                 if not receive:
                     break
-
                 num = int(receive)
                 guess = [0] * 4
                 digit = 1000

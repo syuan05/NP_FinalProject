@@ -124,6 +124,9 @@ class GuessNumberClient:
         self.status_label = tk.Label(self.right_frame, text="", font=('Arial', 10))
         self.status_label.pack(pady=10)
 
+        self.quit_botton = tk.Button(self.right_frame, text='Leave', command=self.disconnect)
+        self.quit_botton.pack(pady=10)
+
     def send_guess(self, event=None):
         try:
             guess = self.guess_input.get()
@@ -174,9 +177,13 @@ class GuessNumberClient:
                 break
 
     def disconnect(self):
-        if self.client_socket:
-            self.client_socket.close()
-        self.root.quit()
+        answer = messagebox.askyesno("Exit Game", "Are you sure you want to leave?")
+        if answer: 
+            if self.client_socket:
+                self.client_socket.close()
+            self.root.quit()
+        else: 
+            self.status_label.config(text="Welcome back to the game!", fg="blue")
 
 def main():
     root = tk.Tk()
