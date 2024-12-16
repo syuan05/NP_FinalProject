@@ -14,6 +14,7 @@ class GameServer:
         self.ans = [random.randrange(10) for _ in range(4)]
         self.srv_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.srv_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.logged_in_users = set()
 
     def broadcast(self, message, sender_client=None):
         print(f"Broadcasting message: {message}")
@@ -41,7 +42,10 @@ class GameServer:
                         client.sendall("REGISTER_FAILED|Username already exists.".encode('utf-8'))
 
                 elif command == "LOGIN":
-                    if self.validate_login(username, password):
+                    if username in self.logged_in_users:
+                        client.sendall("LOGIN_FAILED|User is already logged in.".encode('utf-8'))
+                    elif self.validate_login(username, password):
+                        self.logged_in_users.add(username)  # 标记用户已登录
                         client.sendall("LOGIN_SUCCESS|Login successful!".encode('utf-8'))
                         return username
                     else:
@@ -51,6 +55,7 @@ class GameServer:
         except Exception as e:
             print(f"Login/Register error: {e}")
         return None
+
 
     def register_user(self, username, password):
         if os.path.exists(USER_FILE):

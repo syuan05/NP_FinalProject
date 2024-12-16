@@ -54,6 +54,9 @@ class GuessNumberClient:
             self.clear_window()
             self.create_game_ui()
             self.listen_server()
+        elif "already logged in" in response:
+            messagebox.showerror("Login Failed", "This user is already logged in!")
+            self.client_socket.close()
         else:
             messagebox.showerror("Login Failed", response.split("|")[1])
             self.client_socket.close()
