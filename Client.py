@@ -173,16 +173,8 @@ class GuessNumberClient:
                     players_text = "線上玩家：" + ", ".join(players)
                     self.online_players_label.config(text=players_text)
                 
-                # 處理玩家離開訊息
-                elif "has left the game" in feedback:
-                    self.status_label.config(text=feedback, fg="red")
-                
-                # 遊戲結束訊息
-                elif "Game ended due to insufficient players" in feedback:
-                    self.status_label.config(text=feedback, fg="red")
-                    self.guess_input.config(state=tk.DISABLED)
-                    self.send_button.config(state=tk.DISABLED)
-                    messagebox.showinfo("Game Over", "Game ended due to insufficient players")
+                elif "Game Started" in feedback:
+                    self.status_label.config(text=feedback, fg="green")
                 
                 elif "Your turn" in feedback:
                     self.is_my_turn = True
@@ -216,25 +208,14 @@ class GuessNumberClient:
             
             except Exception as e:
                 self.status_label.config(text=f"Receive error: {e}", fg="red")
-                # 如果接收消息出錯，自動斷開連接
-                self.disconnect()
                 break
 
     def disconnect(self):
         answer = messagebox.askyesno("Exit Game", "Are you sure you want to leave?")
         if answer: 
             if self.client_socket:
-                try:
-                    # 在斷開連接前關閉接收線程
-                    if hasattr(self, 'receive_thread') and self.receive_thread.is_alive():
-                        self.receive_thread.join(timeout=1)
-                    self.client_socket.close()
-                except Exception as e:
-                    print(f"Error closing socket: {e}")
-            
-            # 重新顯示登入畫面
-            self.clear_window()
-            self.create_login_window()
+                self.client_socket.close()
+            self.root.quit()
         else: 
             self.status_label.config(text="Welcome back to the game!", fg="blue")
 

@@ -91,6 +91,10 @@ class GameServer:
         self.current_turn_index = 0
         self.game_in_progress = True
         
+        # start_message = f"Game Started! Number chosen. {self.game_players[self.current_turn_index].username}'s turn."
+        # for player in self.game_players:
+            # player.client.sendall(start_message.encode('utf-8'))
+        
         first_player = self.game_players[self.current_turn_index]
         first_player.client.sendall("Your turn|Please make a guess.".encode('utf-8'))
 
@@ -138,7 +142,6 @@ class GameServer:
                 if not receive:
                     break
                 
-                # 確認是否是當前玩家的回合
                 if client != self.game_players[self.current_turn_index].client:
                     client.sendall("It's not your turn.".encode('utf-8'))
                     continue
@@ -185,26 +188,7 @@ class GameServer:
                 print(f"Error: {e}")
                 break
         
-        # 玩家斷線處理
-        player_left = username
-        if username in self.online_players:
-            self.online_players.remove(username)
-        
-        # 從遊戲玩家中移除
-        self.game_players = [p for p in self.game_players if p.username != username]
-        
-        # 廣播玩家離開訊息
-        left_game_msg = f"{player_left} has left the game."
-        self.broadcast(left_game_msg)
-        
-        # 若遊戲正在進行中，且玩家人數少於2人，則結束遊戲
-        if self.game_in_progress and len(self.game_players) < 2:
-            end_game_msg = "Game ended due to insufficient players."
-            self.broadcast(end_game_msg)
-            self.game_in_progress = False
-            self.current_turn_index = 0
-        
-        # 更新線上玩家列表
+        self.online_players.remove(username)
         online_players_str = "|".join(self.online_players)
         self.broadcast(f"ONLINE_PLAYERS|{online_players_str}")
         
