@@ -13,6 +13,7 @@ class GuessNumberClient:
         self.port = 54321
         self.client_socket = None
         self.username = None
+        self.is_my_turn = False
 
         self.create_login_window()
 
@@ -124,18 +125,26 @@ class GuessNumberClient:
         self.send_button = tk.Button(self.input_frame, text='Send', command=self.send_guess)
         self.send_button.pack(side=tk.LEFT, padx=5)
 
-        self.status_label = tk.Label(self.right_frame, text="", font=('Arial', 10))
+        self.status_label = tk.Label(self.right_frame, text="Waiting for game to start", font=('Arial', 10))
         self.status_label.pack(pady=10)
 
-        self.quit_botton = tk.Button(self.right_frame, text='Leave', command=self.disconnect)
-        self.quit_botton.pack(pady=10)
+        self.quit_button = tk.Button(self.right_frame, text='Leave', command=self.disconnect)
+        self.quit_button.pack(pady=10)
+
+        self.guess_input.config(state=tk.DISABLED)
+        self.send_button.config(state=tk.DISABLED)
 
     def send_guess(self, event=None):
         try:
+            if not self.is_my_turn:
+                messagebox.showwarning("Not Your Turn", "It's not your turn to guess!")
+                return
+
             guess = self.guess_input.get()
             if not guess.isdigit() or len(guess) != 4:
                 messagebox.showwarning("Error input", "Please enter a 4-digit number")
                 return
+            
             self.client_socket.send(guess.encode('utf-8'))
             self.guess_input.delete(0, tk.END)
         except Exception as e:
@@ -154,12 +163,22 @@ class GuessNumberClient:
         while True:
             try:
                 feedback = self.client_socket.recv(1024).decode('utf-8')
-                if "It's not your turn" in feedback:
-                    self.guess_input.config(state=tk.DISABLED)
-                    self.status_label.config(text="It's not your turn. Please wait.", fg="red")
+                
+                if "Game Started" in feedback:
+                    self.status_label.config(text=feedback, fg="green")
+                
                 elif "Your turn" in feedback:
+                    self.is_my_turn = True
                     self.guess_input.config(state=tk.NORMAL)
+                    self.send_button.config(state=tk.NORMAL)
                     self.status_label.config(text="It's your turn. Please make a guess.", fg="green")
+                
+                elif "It's not your turn" in feedback:
+                    self.is_my_turn = False
+                    self.guess_input.config(state=tk.DISABLED)
+                    self.send_button.config(state=tk.DISABLED)
+                    self.status_label.config(text=feedback, fg="red")
+                
                 elif "guessed the correct number" in feedback:
                     parts = feedback.split("|")
                     self.status_label.config(text=f"Game Over! {parts[0]}", fg="blue")
@@ -167,14 +186,17 @@ class GuessNumberClient:
                     self.send_button.config(state=tk.DISABLED)
                     messagebox.showinfo("Game Over", f"The correct number was: {parts[1]}")
                     break
+                
                 elif "guess:" in feedback:
                     parts = feedback.split("|")
                     player = parts[0].split(" ")[0]
                     guess = parts[0].split(": ")[1]
                     result = parts[1]
                     self.update_history(player, guess, result)
+                
                 else:
                     self.status_label.config(text=feedback, fg="black")
+            
             except Exception as e:
                 self.status_label.config(text=f"Receive error: {e}", fg="red")
                 break
