@@ -131,7 +131,7 @@ class GuessNumberClient:
         self.online_players_label = tk.Label(self.right_frame, text="線上玩家：", font=('Arial', 10))
         self.online_players_label.pack(pady=5)
 
-        self.quit_button = tk.Button(self.right_frame, text='離開', command=self.disconnect)
+        self.quit_button = tk.Button(self.right_frame, text='Leave', command=self.disconnect)
         self.quit_button.pack(pady=10)
 
         self.guess_input.config(state=tk.DISABLED)
@@ -170,7 +170,7 @@ class GuessNumberClient:
                 # 處理線上玩家更新
                 if feedback.startswith("ONLINE_PLAYERS|"):
                     players = feedback.split("|")[1:]
-                    players_text = "線上玩家：" + ", ".join(players)
+                    players_text = "Online Player：" + ", ".join(players)
                     self.online_players_label.config(text=players_text)
                 
                 elif "Game Started" in feedback:

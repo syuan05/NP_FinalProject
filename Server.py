@@ -113,7 +113,7 @@ class GameServer:
             print(f"Client {addr} failed to log in.")
             client.close()
             return
-        
+
         print(f"User '{username}' from {addr} has logged in.")
         
         self.online_players.append(username)
@@ -140,12 +140,14 @@ class GameServer:
             try:
                 receive = client.recv(1024).decode('utf-8')
                 if not receive:
+                    print(f"Client {addr} disconnected.")
                     break
-                
+
                 if client != self.game_players[self.current_turn_index].client:
                     client.sendall("It's not your turn.".encode('utf-8'))
                     continue
-                
+
+                # Process the guess logic here...
                 num = int(receive)
                 guess = [0] * 4
                 digit = 1000
@@ -187,12 +189,17 @@ class GameServer:
             except Exception as e:
                 print(f"Error: {e}")
                 break
-        
+
+        # Handle client disconnection
         self.online_players.remove(username)
+        self.logged_in_users.remove(username)
+        self.clients.remove(client)
         online_players_str = "|".join(self.online_players)
         self.broadcast(f"ONLINE_PLAYERS|{online_players_str}")
         
         client.close()
+        print(f"User '{username}' has logged out.")
+
 
     def start(self):
         self.srv_socket.bind(('', self.port))
@@ -204,7 +211,7 @@ class GameServer:
             print(f"{addr} has connected.")
             client_thread = threading.Thread(target=self.game_start, args=(client, addr))
             client_thread.start()
-            
+
 if __name__ == '__main__':
     server = GameServer()
     server.start()
