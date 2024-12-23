@@ -244,7 +244,12 @@ class GuessNumberClient:
                     guess = parts[0].split(": ")[1]
                     result = parts[1]
                     self.update_history(player, guess, result)
-                
+                elif feedback.startswith("GAME_TERMINATED"):
+                    self.status_label.config(text="Game terminated", fg="red")  # 更新狀態顯示
+                    self.guess_input.config(state=tk.DISABLED)  # 禁用輸入框
+                    self.send_button.config(state=tk.DISABLED)  # 禁用送出按鈕
+                    messagebox.showwarning("Game Over", "A player has disconnected. Game terminated.")  # 彈出遊戲結束提示框
+                    break  # 退出遊戲循環
                 else:
                     self.status_label.config(text=feedback, fg="black")
             

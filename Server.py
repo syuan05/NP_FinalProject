@@ -110,9 +110,10 @@ class GameServer:
         if self.game_in_progress:
             self.game_in_progress = False
             msg = "GAME_TERMINATED|A player has disconnected. Game terminated."
-            self.broadcast(msg)
-            self.game_players.clear()
+            self.broadcast(msg)  # 向所有玩家廣播遊戲結束的消息
+            self.game_players.clear()  # 清除遊戲玩家列表
             self.current_turn_index = 0
+
 
     def game_start(self, client, addr):
         username = self.handle_login(client)
@@ -208,7 +209,7 @@ class GameServer:
         client.close()
         print(f"User '{username}' has logged out.")
 
-
+    
     def start(self):
         self.srv_socket.bind(('', self.port))
         self.srv_socket.listen(5)
