@@ -106,6 +106,13 @@ class GameServer:
                 player.client.sendall("Your turn|Please make a guess.".encode('utf-8'))
             else:
                 player.client.sendall(f"It's {self.game_players[self.current_turn_index].username}'s turn.".encode('utf-8'))
+    def handle_player_disconnect(self):
+        if self.game_in_progress:
+            self.game_in_progress = False
+            msg = "GAME_TERMINATED|A player has disconnected. Game terminated."
+            self.broadcast(msg)
+            self.game_players.clear()
+            self.current_turn_index = 0
 
     def game_start(self, client, addr):
         username = self.handle_login(client)
@@ -194,6 +201,7 @@ class GameServer:
         self.online_players.remove(username)
         self.logged_in_users.remove(username)
         self.clients.remove(client)
+        self.handle_player_disconnect()
         online_players_str = "|".join(self.online_players)
         self.broadcast(f"ONLINE_PLAYERS|{online_players_str}")
         

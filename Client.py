@@ -209,6 +209,12 @@ class GuessNumberClient:
                     players_text = "Online Player：" + ", ".join(players)
                     self.online_players_label.config(text=players_text)
                 
+                elif feedback.startswith("GAME_TERMINATED"):
+                    self.status_label.config(text="Game terminated", fg="red")
+                    self.guess_input.config(state=tk.DISABLED)
+                    self.send_button.config(state=tk.DISABLED)
+                    messagebox.showwarning("Game Over", "A player has disconnected. Game terminated.")
+                    break
                 elif "Game Started" in feedback:
                     self.status_label.config(text=feedback, fg="green")
                 
@@ -244,6 +250,7 @@ class GuessNumberClient:
             
             except Exception as e:
                 self.status_label.config(text=f"Receive error: {e}", fg="red")
+                messagebox.showerror("Connection Error", "Lost connection to server")
                 break
 
     def disconnect(self):
