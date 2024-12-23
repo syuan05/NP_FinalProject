@@ -25,6 +25,8 @@ class GuessNumberClient:
         tk.Label(self.root, text="Password:").pack(pady=5)
         self.password_input = tk.Entry(self.root, show="*")
         self.password_input.pack(pady=5)
+        
+        self.root.bind('<Return>', lambda event: self.login())
 
         tk.Button(self.root, text="Login", command=self.login).pack(pady=5)
         tk.Button(self.root, text="Register", command=self.register).pack(pady=5)
