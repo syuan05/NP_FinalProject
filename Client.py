@@ -25,11 +25,18 @@ class GuessNumberClient:
         tk.Label(self.root, text="Password:").pack(pady=5)
         self.password_input = tk.Entry(self.root, show="*")
         self.password_input.pack(pady=5)
-        
-        self.root.bind('<Return>', lambda event: self.login())
 
         tk.Button(self.root, text="Login", command=self.login).pack(pady=5)
         tk.Button(self.root, text="Register", command=self.register).pack(pady=5)
+
+        self.root.bind('<Return>', lambda event: self.safe_login())
+
+    def safe_login(self):
+        try:
+            self.login()
+        except AttributeError:
+            messagebox.showerror("Error", "Login window is not active.")
+
 
     def connect_server(self):
         try:
@@ -40,6 +47,10 @@ class GuessNumberClient:
             self.root.quit()
 
     def login(self):
+        if not hasattr(self, 'username_input') or not hasattr(self, 'password_input'):
+            messagebox.showerror("Error", "Input fields are not available.")
+            return
+
         username = self.username_input.get()
         password = self.password_input.get()
 
@@ -59,10 +70,17 @@ class GuessNumberClient:
             self.listen_server()
         elif "already logged in" in response:
             messagebox.showerror("Login Failed", "This user is already logged in!")
+            self.clear_input_fields()
             self.client_socket.close()
         else:
             messagebox.showerror("Login Failed", response.split("|")[1])
+            self.clear_input_fields()
             self.client_socket.close()
+
+
+    def clear_input_fields(self):
+        self.username_input.delete(0, tk.END)
+        self.password_input.delete(0, tk.END)
 
     def register(self):
         username = self.username_input.get()
@@ -83,6 +101,8 @@ class GuessNumberClient:
         self.client_socket.close()
 
     def clear_window(self):
+        self.root.unbind('<Return>')
+
         for widget in self.root.winfo_children():
             widget.destroy()
 
