@@ -161,20 +161,34 @@ class GuessNumberClient:
 
     def send_guess(self, event=None):
         try:
+            # 获取输入
+            guess = self.guess_input.get()
+
+            # 清空输入框并禁用控件，确保用户无法再次输入
+            self.guess_input.delete(0, tk.END)
+            self.guess_input.config(state=tk.DISABLED)
+            self.send_button.config(state=tk.DISABLED)
+
+            # 检查是否是该玩家的回合
             if not self.is_my_turn:
                 messagebox.showwarning("Not Your Turn", "It's not your turn to guess!")
                 return
 
-            guess = self.guess_input.get()
+            # 验证输入是否为4位数字
             if not guess.isdigit() or len(guess) != 4:
                 messagebox.showwarning("Error input", "Please enter a 4-digit number")
+                # 恢复输入框状态以便玩家重新输入
+                self.guess_input.config(state=tk.NORMAL)
+                self.send_button.config(state=tk.NORMAL)
                 return
-            
+
+            # 发送猜测到服务器
             self.client_socket.send(guess.encode('utf-8'))
-            self.guess_input.delete(0, tk.END)
+
         except Exception as e:
             self.status_label.config(text=f"Send error: {e}", fg="red")
             self.disconnect()
+
 
     def update_history(self, player, guess, result):
         self.root.after(0, lambda: self.show_history.insert('', 'end', values=(player, guess, result)))
