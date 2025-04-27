@@ -15,7 +15,6 @@ class GameServer:
         self.srv_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.srv_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.logged_in_users = set()
-        
         self.current_turn_index = 0
         self.game_players = []
         self.game_in_progress = False
@@ -71,8 +70,7 @@ class GameServer:
                 for line in file:
                     stored_username, _ = line.strip().split("|")
                     if username == stored_username:
-                        return False 
-
+                        return False
         with open(USER_FILE, "a") as file:
             file.write(f"{username}|{password}\n")
         return True
@@ -83,37 +81,31 @@ class GameServer:
                 for line in file:
                     stored_username, stored_password = line.strip().split("|")
                     if username == stored_username and password == stored_password:
-                        return True 
+                        return True
         return False
 
     def start_game(self):
         self.ans = [random.randrange(10) for _ in range(4)]
         self.current_turn_index = 0
         self.game_in_progress = True
-        
-        # start_message = f"Game Started! Number chosen. {self.game_players[self.current_turn_index].username}'s turn."
-        # for player in self.game_players:
-            # player.client.sendall(start_message.encode('utf-8'))
-        
         first_player = self.game_players[self.current_turn_index]
         first_player.client.sendall("Your turn|Please make a guess.".encode('utf-8'))
 
     def next_turn(self):
         self.current_turn_index = (self.current_turn_index + 1) % len(self.game_players)
-        
         for player in self.game_players:
             if player.client == self.game_players[self.current_turn_index].client:
                 player.client.sendall("Your turn|Please make a guess.".encode('utf-8'))
             else:
                 player.client.sendall(f"It's {self.game_players[self.current_turn_index].username}'s turn.".encode('utf-8'))
+
     def handle_player_disconnect(self):
         if self.game_in_progress:
             self.game_in_progress = False
             msg = "GAME_TERMINATED|A player has disconnected. Game terminated."
-            self.broadcast(msg)  # 向所有玩家廣播遊戲結束的消息
-            self.game_players.clear()  # 清除遊戲玩家列表
+            self.broadcast(msg)
+            self.game_players.clear()
             self.current_turn_index = 0
-
 
     def game_start(self, client, addr):
         username = self.handle_login(client)
@@ -123,7 +115,6 @@ class GameServer:
             return
 
         print(f"User '{username}' from {addr} has logged in.")
-        
         self.online_players.append(username)
         self.send_online_players(client)
         online_players_str = "|".join(self.online_players)
@@ -155,7 +146,6 @@ class GameServer:
                     client.sendall("It's not your turn.".encode('utf-8'))
                     continue
 
-                # Process the guess logic here...
                 num = int(receive)
                 guess = [0] * 4
                 digit = 1000
@@ -198,7 +188,6 @@ class GameServer:
                 print(f"Error: {e}")
                 break
 
-        # Handle client disconnection
         self.online_players.remove(username)
         self.logged_in_users.remove(username)
         self.clients.remove(client)
@@ -209,7 +198,6 @@ class GameServer:
         client.close()
         print(f"User '{username}' has logged out.")
 
-    
     def start(self):
         self.srv_socket.bind(('', self.port))
         self.srv_socket.listen(5)

@@ -37,7 +37,6 @@ class GuessNumberClient:
         except AttributeError:
             messagebox.showerror("Error", "Login window is not active.")
 
-
     def connect_server(self):
         try:
             self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -77,7 +76,6 @@ class GuessNumberClient:
             self.clear_input_fields()
             self.client_socket.close()
 
-
     def clear_input_fields(self):
         self.username_input.delete(0, tk.END)
         self.password_input.delete(0, tk.END)
@@ -102,7 +100,6 @@ class GuessNumberClient:
 
     def clear_window(self):
         self.root.unbind('<Return>')
-
         for widget in self.root.winfo_children():
             widget.destroy()
 
@@ -161,34 +158,26 @@ class GuessNumberClient:
 
     def send_guess(self, event=None):
         try:
-            # 获取输入
             guess = self.guess_input.get()
-
-            # 清空输入框并禁用控件，确保用户无法再次输入
             self.guess_input.delete(0, tk.END)
             self.guess_input.config(state=tk.DISABLED)
             self.send_button.config(state=tk.DISABLED)
 
-            # 检查是否是该玩家的回合
             if not self.is_my_turn:
                 messagebox.showwarning("Not Your Turn", "It's not your turn to guess!")
                 return
 
-            # 验证输入是否为4位数字
             if not guess.isdigit() or len(guess) != 4:
                 messagebox.showwarning("Error input", "Please enter a 4-digit number")
-                # 恢复输入框状态以便玩家重新输入
                 self.guess_input.config(state=tk.NORMAL)
                 self.send_button.config(state=tk.NORMAL)
                 return
 
-            # 发送猜测到服务器
             self.client_socket.send(guess.encode('utf-8'))
 
         except Exception as e:
             self.status_label.config(text=f"Send error: {e}", fg="red")
             self.disconnect()
-
 
     def update_history(self, player, guess, result):
         self.root.after(0, lambda: self.show_history.insert('', 'end', values=(player, guess, result)))
@@ -202,34 +191,34 @@ class GuessNumberClient:
         while True:
             try:
                 feedback = self.client_socket.recv(1024).decode('utf-8')
-                
-                # 處理線上玩家更新
+
                 if feedback.startswith("ONLINE_PLAYERS|"):
                     players = feedback.split("|")[1:]
                     players_text = "Online Player：" + ", ".join(players)
                     self.online_players_label.config(text=players_text)
-                
+
                 elif feedback.startswith("GAME_TERMINATED"):
                     self.status_label.config(text="Game terminated", fg="red")
                     self.guess_input.config(state=tk.DISABLED)
                     self.send_button.config(state=tk.DISABLED)
                     messagebox.showwarning("Game Over", "A player has disconnected. Game terminated.")
                     break
+
                 elif "Game Started" in feedback:
                     self.status_label.config(text=feedback, fg="green")
-                
+
                 elif "Your turn" in feedback:
                     self.is_my_turn = True
                     self.guess_input.config(state=tk.NORMAL)
                     self.send_button.config(state=tk.NORMAL)
                     self.status_label.config(text="It's your turn. Please make a guess.", fg="green")
-                
+
                 elif "It's not your turn" in feedback:
                     self.is_my_turn = False
                     self.guess_input.config(state=tk.DISABLED)
                     self.send_button.config(state=tk.DISABLED)
                     self.status_label.config(text=feedback, fg="red")
-                
+
                 elif "guessed the correct number" in feedback:
                     parts = feedback.split("|")
                     self.status_label.config(text=f"Game Over! {parts[0]}", fg="blue")
@@ -237,22 +226,17 @@ class GuessNumberClient:
                     self.send_button.config(state=tk.DISABLED)
                     messagebox.showinfo("Game Over", f"The correct number was: {parts[1]}")
                     break
-                
+
                 elif "guess:" in feedback:
                     parts = feedback.split("|")
                     player = parts[0].split(" ")[0]
                     guess = parts[0].split(": ")[1]
                     result = parts[1]
                     self.update_history(player, guess, result)
-                elif feedback.startswith("GAME_TERMINATED"):
-                    self.status_label.config(text="Game terminated", fg="red")  # 更新狀態顯示
-                    self.guess_input.config(state=tk.DISABLED)  # 禁用輸入框
-                    self.send_button.config(state=tk.DISABLED)  # 禁用送出按鈕
-                    messagebox.showwarning("Game Over", "A player has disconnected. Game terminated.")  # 彈出遊戲結束提示框
-                    break  # 退出遊戲循環
+
                 else:
                     self.status_label.config(text=feedback, fg="black")
-            
+
             except Exception as e:
                 self.status_label.config(text=f"Receive error: {e}", fg="red")
                 messagebox.showerror("Connection Error", "Lost connection to server")
@@ -260,11 +244,11 @@ class GuessNumberClient:
 
     def disconnect(self):
         answer = messagebox.askyesno("Exit Game", "Are you sure you want to leave?")
-        if answer: 
+        if answer:
             if self.client_socket:
                 self.client_socket.close()
             self.root.quit()
-        else: 
+        else:
             self.status_label.config(text="Welcome back to the game!", fg="blue")
 
 def main():
